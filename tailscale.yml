@@ -1,0 +1,49 @@
+- name: Install and Configure Tailscale
+  hosts: localhost
+  connection: local
+  become: yes
+
+  tasks:
+    - name: Update apt cache
+      ansible.builtin.apt:
+        update_cache: yes
+        cache_valid_time: 3600
+      changed_when: false
+
+    - name: Install prerequisite packages for Tailscale
+      ansible.builtin.apt:
+        name:
+          - curl
+          - wget
+          - gpg # GPG might be needed for apt repository key if not done by install script
+        state: present
+
+    - name: Install Tailscale (if not installed)
+      ansible.builtin.shell:
+        cmd: curl -fsSL https://tailscale.com/install.sh | sh
+        creates: /usr/bin/tailscale # This makes the task idempotent
+
+    - name: Enable IP forwarding
+      ansible.posix.sysctl:
+        name: "{{ item }}"
+        value: "1"
+        sysctl_set: yes
+        state: present
+        reload: yes
+      loop:
+        - net.ipv4.ip_forward
+        - net.ipv6.conf.all.forwarding
+
+    - name: Check if Tailscale is already up
+      ansible.builtin.command: tailscale status
+      register: tailscale_status
+      changed_when: false
+      failed_when: false # Don't fail if tailscale isn't running yet
+
+    - name: Run tailscale up
+      ansible.builtin.command: >
+        tailscale up
+        --auth-key={{ tailscale_auth_key }}
+        --hostname=code-server-aws
+        --ssh
+      when: "'Logged out' in tailscale_status.stdout or tailscale_status.rc != 0"

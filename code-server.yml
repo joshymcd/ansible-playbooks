@@ -1,0 +1,51 @@
+- name: Install and Configure code-server
+  hosts: localhost
+  connection: local
+  become: yes
+
+  tasks:
+    - name: Update apt cache
+      ansible.builtin.apt:
+        update_cache: yes
+        cache_valid_time: 3600
+      changed_when: false
+
+    - name: Install prerequisite packages for code-server
+      ansible.builtin.apt:
+        name:
+          - curl # Already covered by Tailscale, but safe to include for modularity
+        state: present
+
+    - name: Install code-server (if not installed)
+      ansible.builtin.shell:
+        cmd: curl -fsSL https://code-server.dev/install.sh | sh
+        creates: /usr/bin/code-server # This makes the task idempotent
+
+    - name: Create code-server config directory for ubuntu user
+      ansible.builtin.file:
+        path: /home/ubuntu/.config/code-server
+        state: directory
+        owner: ubuntu
+        group: ubuntu
+        mode: "0755"
+
+    - name: Create code-server config.yaml from template
+      ansible.builtin.template:
+        src: templates/code-server-config.yaml.j2 # Path is relative to this playbook's directory
+        dest: /home/ubuntu/.config/code-server/config.yaml
+        owner: ubuntu
+        group: ubuntu
+        mode: "0644"
+      notify: Restart code-server
+
+    - name: Enable and start code-server systemd service
+      ansible.builtin.systemd:
+        name: code-server@ubuntu
+        enabled: yes
+        state: started
+
+  handlers:
+    - name: Restart code-server
+      ansible.builtin.systemd:
+        name: code-server@ubuntu
+        state: restarted
