@@ -34,13 +34,23 @@
       become_user: ubuntu
       become: yes
 
-    - name: Set Node.js 22 as default
+    - name: Install Node.js 22 using nvm
       ansible.builtin.shell:
         cmd: |
           export NVM_DIR="$HOME/.nvm"
           [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-          nvm use 22
-          nvm alias default 22
+          nvm install 24
+        creates: /home/ubuntu/.nvm/versions/node/v24.*/bin/node
+      become_user: ubuntu
+      become: yes
+
+    - name: Set Node.js 24 as default
+      ansible.builtin.shell:
+        cmd: |
+          export NVM_DIR="$HOME/.nvm"
+          [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+          nvm use 24
+          nvm alias default 24
       become_user: ubuntu
       become: yes
       changed_when: false
