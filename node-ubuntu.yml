@@ -1,0 +1,108 @@
+- name: Install Node.js, npm, and pnpm using nvm
+  hosts: localhost
+  connection: local
+  become: yes
+
+  tasks:
+    - name: Update apt cache
+      ansible.builtin.apt:
+        update_cache: yes
+        cache_valid_time: 3600
+      changed_when: false
+
+    - name: Install prerequisite packages
+      ansible.builtin.apt:
+        name:
+          - curl
+          - build-essential
+        state: present
+
+    - name: Download and install nvm
+      ansible.builtin.shell:
+        cmd: curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash
+        creates: /home/ubuntu/.nvm/nvm.sh
+      become_user: ubuntu
+      become: yes
+
+    - name: Install Node.js 22 using nvm
+      ansible.builtin.shell:
+        cmd: |
+          export NVM_DIR="$HOME/.nvm"
+          [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+          nvm install 22
+        creates: /home/ubuntu/.nvm/versions/node/v22.*/bin/node
+      become_user: ubuntu
+      become: yes
+
+    - name: Set Node.js 22 as default
+      ansible.builtin.shell:
+        cmd: |
+          export NVM_DIR="$HOME/.nvm"
+          [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+          nvm use 22
+          nvm alias default 22
+      become_user: ubuntu
+      become: yes
+      changed_when: false
+
+    - name: Enable pnpm using corepack
+      ansible.builtin.shell:
+        cmd: |
+          export NVM_DIR="$HOME/.nvm"
+          [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+          corepack enable pnpm
+        creates: /home/ubuntu/.nvm/versions/node/v22.*/bin/pnpm
+      become_user: ubuntu
+      become: yes
+
+    - name: Verify Node.js installation
+      ansible.builtin.shell:
+        cmd: |
+          export NVM_DIR="$HOME/.nvm"
+          [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+          node -v
+      become_user: ubuntu
+      become: yes
+      register: node_version
+      changed_when: false
+
+    - name: Verify npm installation
+      ansible.builtin.shell:
+        cmd: |
+          export NVM_DIR="$HOME/.nvm"
+          [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+          npm -v
+      become_user: ubuntu
+      become: yes
+      register: npm_version
+      changed_when: false
+
+    - name: Verify pnpm installation
+      ansible.builtin.shell:
+        cmd: |
+          export NVM_DIR="$HOME/.nvm"
+          [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+          pnpm -v
+      become_user: ubuntu
+      become: yes
+      register: pnpm_version
+      changed_when: false
+
+    - name: Display installed versions
+      ansible.builtin.debug:
+        msg:
+          - "Node.js version: {{ node_version.stdout }}"
+          - "npm version: {{ npm_version.stdout }}"
+          - "pnpm version: {{ pnpm_version.stdout }}"
+
+    - name: Add nvm to ubuntu user's shell profile
+      ansible.builtin.lineinfile:
+        path: /home/ubuntu/.bashrc
+        line: "{{ item }}"
+        create: yes
+        owner: ubuntu
+        group: ubuntu
+      loop:
+        - 'export NVM_DIR="$HOME/.nvm"'
+        - '[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm'
+        - '[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion'
