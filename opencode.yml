@@ -1,0 +1,125 @@
+- name: Install and Configure sst opencode
+  hosts: localhost
+  connection: local
+  become: yes
+
+  tasks:
+    - name: Update apt cache
+      ansible.builtin.apt:
+        update_cache: yes
+        cache_valid_time: 3600
+      changed_when: false
+
+    - name: Install prerequisite packages for opencode
+      ansible.builtin.apt:
+        name:
+          - curl
+          - wget
+          - unzip
+        state: present
+
+    - name: Check if opencode is already installed
+      ansible.builtin.command: which opencode
+      register: opencode_check
+      changed_when: false
+      failed_when: false
+
+    - name: Install opencode using install script
+      ansible.builtin.shell:
+        cmd: curl -fsSL https://opencode.ai/install | bash
+        creates: /usr/local/bin/opencode
+      when: opencode_check.rc != 0
+      register: install_script_result
+      failed_when: false
+
+    - name: Check if install script succeeded
+      ansible.builtin.command: which opencode
+      register: opencode_check_after_script
+      changed_when: false
+      failed_when: false
+      when: opencode_check.rc != 0
+
+    - name: Fallback - Install opencode using npm (requires Node.js)
+      ansible.builtin.shell:
+        cmd: |
+          export NVM_DIR="$HOME/.nvm"
+          [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+          npm install -g opencode-ai
+      become_user: ubuntu
+      become: yes
+      when:
+        - opencode_check.rc != 0
+        - opencode_check_after_script.rc != 0
+      register: npm_install_result
+      failed_when: false
+
+    - name: Ensure opencode binary is in PATH for all users
+      ansible.builtin.file:
+        src: /usr/local/bin/opencode
+        dest: /usr/bin/opencode
+        state: link
+        force: yes
+      when:
+        - opencode_check.rc != 0
+        - opencode_check_after_script.rc == 0
+
+    - name: Create opencode config directory for ubuntu user
+      ansible.builtin.file:
+        path: /home/ubuntu/.config/opencode
+        state: directory
+        owner: ubuntu
+        group: ubuntu
+        mode: "0755"
+
+    - name: Create opencode themes directory for ubuntu user
+      ansible.builtin.file:
+        path: /home/ubuntu/.config/opencode/themes
+        state: directory
+        owner: ubuntu
+        group: ubuntu
+        mode: "0755"
+
+    - name: Set ownership of opencode directories
+      ansible.builtin.file:
+        path: /home/ubuntu/.local/share/opencode
+        state: directory
+        owner: ubuntu
+        group: ubuntu
+        mode: "0755"
+        recurse: yes
+      ignore_errors: yes
+
+    - name: Final check - Verify opencode installation
+      ansible.builtin.command: which opencode
+      register: final_opencode_check
+      changed_when: false
+      failed_when: false
+
+    - name: Verify opencode installation and get version
+      ansible.builtin.shell:
+        cmd: opencode --version
+      register: opencode_version
+      changed_when: false
+      become_user: ubuntu
+      when: final_opencode_check.rc == 0
+
+    - name: Display installation results
+      ansible.builtin.debug:
+        msg:
+          - "opencode installation status: {{ 'SUCCESS' if final_opencode_check.rc == 0 else 'FAILED' }}"
+          - "opencode version: {{ opencode_version.stdout if final_opencode_check.rc == 0 else 'Not available' }}"
+          - "Installation method: {{ 'Install script' if opencode_check_after_script.rc == 0 else 'npm fallback' if npm_install_result is defined else 'Unknown' }}"
+
+    - name: Fail if opencode installation was unsuccessful
+      ansible.builtin.fail:
+        msg: "opencode installation failed. Please check the logs above for details."
+      when: final_opencode_check.rc != 0
+
+    - name: Add opencode completion to ubuntu user's shell profile
+      ansible.builtin.lineinfile:
+        path: /home/ubuntu/.bashrc
+        line: 'eval "$(opencode --autocompletion)"'
+        create: yes
+        owner: ubuntu
+        group: ubuntu
+      ignore_errors: yes
