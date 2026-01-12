@@ -45,5 +45,6 @@
         tailscale up
         --auth-key={{ tailscale_auth_key }}
         --hostname={{ tailscale_host_name }}
+        --advertise-tags=tag:server
         --ssh
       when: "'Logged out' in tailscale_status.stdout or tailscale_status.rc != 0"
