@@ -44,6 +44,6 @@
       ansible.builtin.command: >
         tailscale up
         --auth-key={{ tailscale_auth_key }}
-        --hostname=code-server-aws
+        --hostname={{ tailscale_host_name }}
         --ssh
       when: "'Logged out' in tailscale_status.stdout or tailscale_status.rc != 0"
